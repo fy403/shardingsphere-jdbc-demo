@@ -2,27 +2,27 @@ dataSources:
   ds0:
     dataSourceClassName: com.zaxxer.hikari.HikariDataSource
     driverClassName: com.mysql.cj.jdbc.Driver
-    jdbcUrl: jdbc:mysql://127.0.0.1:3306/ds_0?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true
+    jdbcUrl: jdbc:mysql://127.0.0.1:3309/ds_0?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true
     username: root
-    password: ilxw
+    password: root
   ds1:
     dataSourceClassName: com.zaxxer.hikari.HikariDataSource
     driverClassName: com.mysql.cj.jdbc.Driver
-    jdbcUrl: jdbc:mysql://127.0.0.1:3306/ds_1?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true
+    jdbcUrl: jdbc:mysql://127.0.0.1:3310/ds_1?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true
     username: root
-    password: ilxw
+    password: root
   ds2:
     dataSourceClassName: com.zaxxer.hikari.HikariDataSource
     driverClassName: com.mysql.cj.jdbc.Driver
-    jdbcUrl: jdbc:mysql://127.0.0.1:3306/ds_2?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true
+    jdbcUrl: jdbc:mysql://127.0.0.1:3311/ds_2?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true
     username: root
-    password: ilxw
+    password: root
   ds3:
     dataSourceClassName: com.zaxxer.hikari.HikariDataSource
     driverClassName: com.mysql.cj.jdbc.Driver
-    jdbcUrl: jdbc:mysql://127.0.0.1:3306/ds_3?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true
+    jdbcUrl: jdbc:mysql://127.0.0.1:3312/ds_3?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true
     username: root
-    password: ilxw
+    password: root
 
 rules:
   - !SHARDING
@@ -30,23 +30,33 @@ rules:
       # 订单表基础表
       t_ent_order:
         # 真实表
-        actualDataNodes: ds$->{0..3}.t_ent_order
+        actualDataNodes: ds$->{0..3}.t_ent_order_$->{0..1}
         # 分库策略
         databaseStrategy:
           complex:
             shardingColumns: id,ent_id
             shardingAlgorithmName: hash-slot-algorithm
+        # 分表策略
+        tableStrategy:
+          complex:
+            shardingColumns: id,ent_id
+            shardingAlgorithmName: hash-slot-table-algorithm
       # 订单详情表
       t_ent_order_detail:
-        actualDataNodes: ds$->{0..3}.t_ent_order_detail
+        actualDataNodes: ds$->{0..3}.t_ent_order_detail_$->{0..1}
         # 分库策略
         databaseStrategy:
           complex:
             shardingColumns:  id,ent_id
             shardingAlgorithmName: hash-slot-algorithm
+        # 分表策略
+        tableStrategy:
+          complex:
+            shardingColumns: id,ent_id
+            shardingAlgorithmName: hash-slot-table-algorithm
       # 订单条目表
       t_ent_order_item:
-        actualDataNodes: ds$->{0..3}.t_ent_order_item_$->{0..7}
+        actualDataNodes: ds$->{0..3}.t_ent_order_item_$->{0..15}
         # 分库策略
         databaseStrategy:
           complex:

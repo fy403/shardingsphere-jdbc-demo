@@ -216,7 +216,7 @@ public class IncrSyncTask {
         statement.executeUpdate(sql);
         statement.close();
     }
-
+    // 防止消费者挂掉丢失染色标记
     private boolean fetchDataMarkingFlagFromCenterStore(String topic) {
         // TODO 从 zookeeper 或者 MySQL 查询整个存储当前增量同步任务是否处于染色中
         return false;

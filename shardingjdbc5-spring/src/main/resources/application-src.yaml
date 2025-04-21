@@ -1,3 +1,7 @@
+server:
+  port: 9793
+  servlet:
+    context-path: /shardingsphere-jdbc-server
 spring:
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
@@ -6,10 +10,11 @@ spring:
   redis:
     host: 127.0.0.1
     port: 6379
+    password: dsJ34jF
 
   datasource:
     driver-class-name: org.apache.shardingsphere.driver.ShardingSphereDriver
-    url: jdbc:shardingsphere:classpath:sharding.yaml
+    url: jdbc:shardingsphere:classpath:sharding-src.yaml
 
   servlet:
     multipart:

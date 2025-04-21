@@ -1,0 +1,119 @@
+version: "3.8"
+
+services:
+  # RocketMQ NameServer
+  rocketmq-namesrv:
+    image: apache/rocketmq:4.9.4
+    container_name: rocketmq-namesrv
+    ports:
+      - "9876:9876"
+    command: sh mqnamesrv
+    networks:
+      - shared_network
+      - scripts_src-sharding-network
+      - scripts_dst-sharding-network
+
+  # RocketMQ Broker
+  rocketmq-broker:
+    image: apache/rocketmq:4.9.4
+    container_name: rocketmq-broker
+    ports:
+      - "10909:10909"
+      - "10911:10911"
+    environment:
+      NAMESRV_ADDR: "rocketmq-namesrv:9876"
+    command: sh mqbroker -n rocketmq-namesrv:9876 -c /home/rocketmq/rocketmq-4.9.4/conf/broker.conf
+    volumes:
+      - ./broker.conf:/home/rocketmq/rocketmq-4.9.4/conf/broker.conf
+    depends_on:
+      - rocketmq-namesrv
+    networks:
+      - shared_network
+      - scripts_src-sharding-network
+      - scripts_dst-sharding-network
+
+  # RocketMQ Dashboard (Console)
+  rocketmq-dashboard:
+    image: styletang/rocketmq-console-ng:latest
+    container_name: rocketmq-dashboard
+    ports:
+      - "8089:8080"
+    environment:
+      JAVA_OPTS: "-Drocketmq.namesrv.addr=rocketmq-namesrv:9876 -Dcom.rocketmq.sendMessageWithVIPChannel=false"
+    depends_on:
+      - rocketmq-namesrv
+    networks:
+      - shared_network
+      - scripts_src-sharding-network
+      - scripts_dst-sharding-network
+
+  # Canal Admin MySQL
+  canal-admin-mysql:
+    image: mysql:5.7
+    container_name: canal-admin-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: canal_manager
+      MYSQL_USER: canal_admin
+      MYSQL_PASSWORD: canal_admin123
+    ports:
+      - "3305:3306" # 避免与现有MySQL冲突
+    volumes:
+      - canal-admin-mysql-data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql # 初始化脚本
+    networks:
+      - shared_network
+
+  # Canal Admin
+  canal-admin:
+    image: canal/canal-admin
+    container_name: canal-admin
+    ports:
+      - "8211:8089" # 访问管理界面：http://localhost:8211
+    environment:
+      - canal.adminUser=admin
+      - canal.adminPasswd=123456
+      - server.port=8089
+      - spring.datasource.url=jdbc:mysql://canal-admin-mysql:3306/canal_manager?useSSL=false
+      - spring.datasource.driver-class-name=com.mysql.jdbc.Driver
+      - spring.datasource.username=canal_admin
+      - spring.datasource.password=canal_admin123
+    networks:
+      - shared_network
+      - scripts_src-sharding-network
+      - scripts_dst-sharding-network
+
+  # Canal Server for MySQL 0
+  src-canal-server-0:
+    image: canal/canal-server
+    container_name: src-canal-server-0
+    volumes:
+      - ./canal.properties:/home/admin/canal-server/conf/canal.properties
+    depends_on:
+      - canal-admin
+    networks:
+      - shared_network
+
+  # Canal Server for MySQL 1
+  src-canal-server-1:
+    image: canal/canal-server
+    container_name: src-canal-server-1
+    volumes:
+      - ./canal.properties:/home/admin/canal-server/conf/canal.properties
+    depends_on:
+      - canal-admin
+    networks:
+      - shared_network
+
+volumes:
+  canal-admin-mysql-data:
+
+networks:
+  shared_network:
+    driver: bridge
+    name: shared_network # 显式命名，方便其他Compose引用
+  scripts_src-sharding-network:
+    external: true # 引用外部网络
+  scripts_dst-sharding-network:
+    external: true # 引用外部网络
+

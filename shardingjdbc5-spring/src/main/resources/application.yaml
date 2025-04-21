@@ -4,11 +4,6 @@ spring:
   application:
     name: shardingsphere-jdbc-server
 
-server:
-  port: 9793
-  servlet:
-    context-path: /shardingsphere-jdbc-server
-
 pagehelper:
   supportMethodsArguments: true
   reasonable: false

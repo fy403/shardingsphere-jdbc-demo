@@ -1,8 +1,7 @@
-databaseName: myorder
-
+databaseName: sharding_db
 dataSources:
   ds0:
-    url: jdbc:mysql://127.0.0.1:3306/ds_0?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true
+    url: jdbc:mysql://mysql-0:3306/ds_0?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true
     username: root
     password: root
     connectionTimeoutMilliseconds: 30000
@@ -11,7 +10,7 @@ dataSources:
     maxPoolSize: 50
     minPoolSize: 1
   ds1:
-    url: jdbc:mysql://127.0.0.1:3306/ds_1?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true
+    url: jdbc:mysql://mysql-1:3306/ds_1?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true
     username: root
     password: root
     connectionTimeoutMilliseconds: 30000
@@ -20,7 +19,7 @@ dataSources:
     maxPoolSize: 50
     minPoolSize: 1
   ds2:
-    url: jdbc:mysql://127.0.0.1:3306/ds_2?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true
+    url: jdbc:mysql://mysql-2:3306/ds_2?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true
     username: root
     password: root
     connectionTimeoutMilliseconds: 30000
@@ -29,7 +28,7 @@ dataSources:
     maxPoolSize: 50
     minPoolSize: 1
   ds3:
-    url: jdbc:mysql://127.0.0.1:3306/ds_3?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true
+    url: jdbc:mysql://mysql-3:3306/ds_3?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true
     username: root
     password: root
     connectionTimeoutMilliseconds: 30000
@@ -41,45 +40,67 @@ dataSources:
 rules:
   - !SHARDING
     tables:
+      # 订单表基础表
       t_ent_order:
-        actualDataNodes: ds$->{0..3}.t_ent_order
+        # 真实表
+        actualDataNodes: ds$->{0..3}.t_ent_order_$->{0..1}
+        # 分库策略
         databaseStrategy:
           complex:
             shardingColumns: id,ent_id
             shardingAlgorithmName: hash-slot-algorithm
-      t_ent_order_detail:
-        actualDataNodes: ds$->{0..3}.t_ent_order_detail
-        databaseStrategy:
-          complex:
-            shardingColumns: id,ent_id
-            shardingAlgorithmName: hash-slot-algorithm
-      t_ent_order_item:
-        actualDataNodes: ds$->{0..3}.t_ent_order_item_$->{0..7}
-        databaseStrategy:
-          complex:
-            shardingColumns: id,ent_id
-            shardingAlgorithmName: hash-slot-algorithm
+        # 分表策略
         tableStrategy:
           complex:
             shardingColumns: id,ent_id
             shardingAlgorithmName: hash-slot-table-algorithm
+      # 订单详情表
+      t_ent_order_detail:
+        actualDataNodes: ds$->{0..3}.t_ent_order_detail_$->{0..1}
+        # 分库策略
+        databaseStrategy:
+          complex:
+            shardingColumns: id,ent_id
+            shardingAlgorithmName: hash-slot-algorithm
+        # 分表策略
+        tableStrategy:
+          complex:
+            shardingColumns: id,ent_id
+            shardingAlgorithmName: hash-slot-table-algorithm
+      # 订单条目表
+      t_ent_order_item:
+        actualDataNodes: ds$->{0..3}.t_ent_order_item_$->{0..15}
+        # 分库策略
+        databaseStrategy:
+          complex:
+            shardingColumns: id,ent_id
+            shardingAlgorithmName: hash-slot-algorithm
+        # 分表策略
+        tableStrategy:
+          complex:
+            shardingColumns: id,ent_id
+            shardingAlgorithmName: hash-slot-table-algorithm
+    # 绑定表
     bindingTables:
       - t_ent_order,t_ent_order_detail
 
+    # 分片算法
     shardingAlgorithms:
       hash-slot-algorithm:
         type: CLASS_BASED
         props:
           strategy: complex
-          algorithmClassName: cn.javayong.proxy.algorithms.HashSlotAlgorithm
+          algorithmClassName: cn.javayong.shardingjdbc5.spring.common.sharding.HashSlotAlgorithm
       hash-slot-table-algorithm:
         type: CLASS_BASED
         props:
           strategy: complex
-          algorithmClassName: cn.javayong.proxy.algorithms.HashSlotAlgorithm
+          algorithmClassName: cn.javayong.shardingjdbc5.spring.common.sharding.HashSlotAlgorithm
           # 非默认值，直接对分片数取余
           directIndex: true
 
-  - !BROADCAST
-    tables:
-      - t_address
+    # 修改后的广播表配置
+    broadcastTables:
+      - t_city
+# props:
+#   sql-show: true

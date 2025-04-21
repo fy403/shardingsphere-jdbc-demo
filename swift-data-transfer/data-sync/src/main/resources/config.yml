@@ -3,11 +3,11 @@ fullStrategy:
       tables: t_ent_order,t_ent_order_detail,t_ent_order_item # 全量同步表
       switchOpen: false                                        # 是否打开开关
     source:                                                   # 源数据库
-      url: jdbc:mysql://127.0.0.1:3306/order_base?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true&useCursorFetch=true
+      url: jdbc:mysql://127.0.0.1:3308/sharding_db?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true&useCursorFetch=true
       username : root
-      password : ilxw
+      password : root
     target:                                                   # 目的数据库
-      url: jdbc:mysql://127.0.0.1:3307/myorder?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true
+      url: jdbc:mysql://127.0.0.1:3313/sharding_db?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true
       username: root
       password: root
 
@@ -18,6 +18,6 @@ incrStrategy:
     nameServer: 127.0.0.1:9876
     topic: new-order-topic                                    # 监听新订单4个分片的队列
   target:                                                     # 目的数据库（写入到老数据库）
-    url: jdbc:mysql://127.0.0.1:3306/order_base?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true&useCursorFetch=true
+    url: jdbc:mysql://127.0.0.1:3313/sharding_db?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true&useCursorFetch=true
     username: root
-    password : ilxw
+    password : root

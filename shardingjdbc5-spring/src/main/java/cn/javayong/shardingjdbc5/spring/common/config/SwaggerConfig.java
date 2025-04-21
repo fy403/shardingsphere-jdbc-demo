@@ -14,7 +14,7 @@ import springfox.documentation.swagger2.annotations.EnableSwagger2WebMvc;
 
 @Configuration
 @EnableSwagger2WebMvc
-@Profile(value = "test")
+@Profile("!prod") // 在非 prod 环境下生效
 public class SwaggerConfig {
 
     @Bean

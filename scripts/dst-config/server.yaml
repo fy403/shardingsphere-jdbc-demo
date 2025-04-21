@@ -1,0 +1,12 @@
+authority:
+  users:
+    - user: root@%
+      password: root
+    - user: sharding
+      password: sharding
+  privilege:
+    type: ALL_PERMITTED
+
+props:
+  proxy-default-port: 3308
+  sql-show: true
