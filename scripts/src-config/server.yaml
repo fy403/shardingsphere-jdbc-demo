@@ -10,3 +10,4 @@ authority:
 props:
   proxy-default-port: 3308
   sql-show: true
+  proxy-mysql-default-version: 8.0.28

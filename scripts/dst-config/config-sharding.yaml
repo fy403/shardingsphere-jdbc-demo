@@ -80,6 +80,12 @@ rules:
           complex:
             shardingColumns: id,ent_id
             shardingAlgorithmName: hash-slot-table-algorithm
+      checksums:
+        actualDataNodes: ds$->{0..3}.checksums
+        databaseStrategy:
+          standard:
+            shardingColumn: tbl
+            shardingAlgorithmName: hash-algorithm
     # 绑定表
     bindingTables:
       - t_ent_order,t_ent_order_detail
@@ -98,7 +104,10 @@ rules:
           algorithmClassName: cn.javayong.shardingjdbc5.spring.common.sharding.HashSlotAlgorithm
           # 非默认值，直接对分片数取余
           directIndex: true
-
+      hash-algorithm:
+        type: HASH_MOD
+        props:
+          sharding-count: 4
     # 修改后的广播表配置
     broadcastTables:
       - t_city
