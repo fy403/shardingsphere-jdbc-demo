@@ -71,7 +71,7 @@ public class FullSyncTask {
             // 批次处理循环
             while (true) {
                 // 检查是否应该停止全量同步
-                if (syncContext.isIncrementalEnabled(tableName) && syncContext.shouldStopFullSync(tableName)) {
+                if (syncContext.shouldStopFullSync(tableName)) {
                     logger.info("表 {} 全量同步已达到阈值，增量同步时间为 {}，最后全量同步时间为 {}，停止全量同步",
                             tableName, 
                             syncContext.getIncrementalTime(tableName),
@@ -81,8 +81,8 @@ public class FullSyncTask {
                 // 1. 批次查询数据
                 List<Map<String, Object>> batchData = fetchBatchData(tableName, columnTypes);
                 if (batchData.isEmpty()) {
-                    Thread.sleep(2000);
-//                    break; // 没有更多数据，退出循环
+                    logger.info("表 {} 没有更多数据，退出循环", tableName);
+                    break; // 没有更多数据，退出循环
                 }
 
                 // 2. 批次插入数据

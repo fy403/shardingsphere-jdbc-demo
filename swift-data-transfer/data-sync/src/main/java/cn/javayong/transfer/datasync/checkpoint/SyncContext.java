@@ -17,6 +17,8 @@ public class SyncContext {
     
     // Default threshold: 1 hour
     private Duration defaultSyncThreshold = Duration.ofSeconds(15);
+
+    private LocalDateTime startUpTime = LocalDateTime.now();
     
     // Per-table thresholds
     private final Map<String, Duration> tableThresholds = new ConcurrentHashMap<>();
@@ -101,14 +103,13 @@ public class SyncContext {
      * @return true if full sync should be stopped, false otherwise
      */
     public boolean shouldStopFullSync(String tableName) {
-        Boolean incrementalEnabled = incrementalEnabledFlags.get(tableName);
-        LocalDateTime incrementalTime = incrementalTimes.get(tableName);
+        // 必须先开启canal监控，然后执行脚本
+        Boolean incrementalEnabled = true;
+        LocalDateTime incrementalTime = startUpTime;
         LocalDateTime lastFullSyncTime = lastFullSyncTimes.get(tableName);
-        
         if (incrementalEnabled == null || !incrementalEnabled || incrementalTime == null || lastFullSyncTime == null) {
             return false;
         }
-        
         Duration threshold = tableThresholds.getOrDefault(tableName, defaultSyncThreshold);
         Duration timeDifference = Duration.between(incrementalTime, lastFullSyncTime);
         return timeDifference.compareTo(threshold) > 0;

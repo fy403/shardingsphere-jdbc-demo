@@ -140,7 +140,7 @@ public class OrderService {
                 item2.setGoodName("我的商品22222");
                 orderMapper.saveOrderItem(item2);
             }
-            Thread.sleep(50 * new Random().nextInt(10));
+            Thread.sleep(500 * new Random().nextInt(10));
         }
     }
 

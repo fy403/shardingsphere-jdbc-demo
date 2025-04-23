@@ -22,11 +22,10 @@ public class MainApplication {
         // 启动全量同步
         FullSyncService fullSyncService = new FullSyncService(dataSyncConfig);
         fullSyncService.init();
+        fullSyncService.waitForAllThreadsToFinish();
         // 启动增量同步
         IncrSyncService incrSyncService = new IncrSyncService(dataSyncConfig);
         incrSyncService.init();
-
-        fullSyncService.waitForAllThreadsToFinish();
         incrSyncService.waitForAllThreadsToFinish();
         logger.info("结束启动同步服务 耗时：" + (System.currentTimeMillis() - start) + "毫秒");
     }

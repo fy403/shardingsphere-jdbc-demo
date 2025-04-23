@@ -33,7 +33,7 @@ public class IncrSyncTask {
 
     private final static Logger logger = LoggerFactory.getLogger(IncrSyncTask.class);
 
-    private final static Integer BATCH_SIZE = 16;
+    private final static Integer BATCH_SIZE = 100;
 
     private IncrSyncEnv incrSyncEnv;
 
@@ -108,30 +108,17 @@ public class IncrSyncTask {
                     logger.info("开始收到消息");
                     Map<String, List<FlatMessage>> tableGroup = new HashMap<>();
 
-                    // 用于记录每个表的第一条消息的创建时间
-                    Map<String, LocalDateTime> firstMessageTimes = new HashMap<>();
-
                     for (MessageExt messageExt : messageExtList) {
                         FlatMessage flatMessage = JSON.parseObject(messageExt.getBody(), FlatMessage.class);
-                        logger.info("flatMessage:" + JSON.toJSONString(flatMessage));
+//                        logger.info("flatMessage:" + JSON.toJSONString(flatMessage));
                         List<Map<String, String>> data = flatMessage.getData();
                         String table = flatMessage.getTable();
                         List<String> pkNames = flatMessage.getPkNames();
-
                         if (!table.equals("tb_transaction")) {
                             if (!dataMarking) {
                                 List<FlatMessage> tableItems = tableGroup.get(table);
                                 if (tableItems == null) {
                                     tableItems = new ArrayList<>();
-
-                                    // 为每个表记录第一条消息的创建时间
-                                    if (!data.isEmpty() && data.get(0).containsKey("create_time")) {
-                                        String createTimeStr = data.get(0).get("create_time");
-                                        if (createTimeStr != null) {
-                                            LocalDateTime createTime = Utils.parseDateTime(createTimeStr);
-                                            firstMessageTimes.put(table, createTime);
-                                        }
-                                    }
                                 }
                                 tableItems.add(flatMessage);
                                 tableGroup.put(table, tableItems);
@@ -148,20 +135,7 @@ public class IncrSyncTask {
                             }
                         }
                     }
-
-                    logger.info("结束收到消息");
-
                     if (MapUtils.isNotEmpty(tableGroup)) {
-                        // 更新同步上下文中每个表的增量时间
-                        for (Map.Entry<String, LocalDateTime> entry : firstMessageTimes.entrySet()) {
-                            String tableName = entry.getKey();
-                            LocalDateTime createTime = entry.getValue();
-
-                            // 初始化该表的增量同步时间
-                            syncContext.initializeIncrementalTime(tableName, createTime);
-                            logger.info("Table {} incremental sync time initialized to: {}",
-                                    tableName, createTime != null ? createTime : "current time");
-                        }
 
                         Connection targetConnection = incrSyncEnv.getTargetDataSource().getConnection();
                         targetConnection.setAutoCommit(false);
