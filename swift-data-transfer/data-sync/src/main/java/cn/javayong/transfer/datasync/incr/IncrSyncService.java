@@ -8,8 +8,12 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.time.LocalDateTime;
+import java.time.Duration;
 
 /**
  * 全量同步服务
@@ -20,40 +24,65 @@ public class IncrSyncService {
 
     private DataSyncConfig dataSyncConfig;
 
-    private IncrSyncEnv incrSyncEnv;
+    private List<IncrSyncEnv> incrSyncEnvs = new ArrayList<>(); // 存储多个增量环境
+    private List<IncrSyncTask> incrSyncTasks = new ArrayList<>(); // 存储多个增量任务
 
-    private IncrSyncTask incrSyncTask;
+    // 新增线程列表，用于存储启动的线程
+    private List<Thread> threadList = new ArrayList<>();
 
     public IncrSyncService(DataSyncConfig dataSyncConfig) {
         this.dataSyncConfig = dataSyncConfig;
     }
 
     public void init() {
-        HashMap<String, HashMap<String, Object>> incrStrategy = dataSyncConfig.getIncrStrategy();
-        if (!incrStrategy.isEmpty()) {
-            Map<String, Object> tableConfig = dataSyncConfig.getIncrStrategy().get("tableConfig"); // 同步表配置
-            // 任务开关是否打开
-            Boolean switchOpen = (Boolean) tableConfig.get("switchOpen");
-            if (switchOpen) {
+        // 获取增量策略列表
+        ArrayList<HashMap<String, HashMap<String, Object>>> incrStrategies = dataSyncConfig.getIncrStrategies();
+        if (incrStrategies != null && !incrStrategies.isEmpty()) {
+            for (HashMap<String, HashMap<String, Object>> strategy : incrStrategies) {
+                Map<String, Object> tableConfig = (Map<String, Object>) strategy.get("tableConfig");
+                if (tableConfig == null || !(Boolean) tableConfig.get("switchOpen")) {
+                    continue; // 如果任务开关未打开，则跳过
+                }
+
                 // 解析数据源参数
-                HashMap<String, Object> targetMap = incrStrategy.get("target");  //  目的数据库
-                // 初始化数据源连接池
+                Map<String, Object> targetMap = (Map<String, Object>) strategy.get("target");
                 DruidDataSource targetDataSource = initDataSource(targetMap);
-                // 监听 rocketmq 主题名
+
+                // 获取任务配置
                 String topic = (String) tableConfig.get("topic");
                 String tables = (String) tableConfig.get("tables");
                 String nameServer = (String) tableConfig.get("nameServer");
-                // 增量环境
-                this.incrSyncEnv = new IncrSyncEnv(nameServer ,topic, tables, targetDataSource);
-                // 新建增量任务，并启动
-                this.incrSyncTask = new IncrSyncTask(incrSyncEnv);
-                this.incrSyncTask.start();
+
+                // 创建增量环境
+                IncrSyncEnv env = new IncrSyncEnv(nameServer, topic, tables, targetDataSource);
+                incrSyncEnvs.add(env);
+
+                // 创建增量任务
+                IncrSyncTask task = new IncrSyncTask(env);
+                incrSyncTasks.add(task);
+                task.start(); // 启动任务
+                threadList.add(task.getExecuteThread());
             }
         }
+        logger.info("incrSyncTasks:{}", incrSyncTasks);
+//        waitForAllThreadsToFinish();
     }
 
+
+    // 新增方法：等待所有线程完成
+    public void waitForAllThreadsToFinish() {
+        for (Thread thread : threadList) {
+            try {
+                thread.join(); // 等待线程结束
+            } catch (InterruptedException e) {
+                logger.error("Thread join interrupted:", e);
+                Thread.currentThread().interrupt(); // 恢复中断状态
+            }
+        }
+        logger.info("增量数据同步结束.");
+    }
     //==============================================================================================  set method ====================================================================
-    private DruidDataSource initDataSource(HashMap<String, Object> map) {
+    private DruidDataSource initDataSource(Map<String, Object> map) {
         DruidDataSource dataSource = new DruidDataSource();
         dataSource.setUrl(String.valueOf(map.get("url")));
         dataSource.setUsername(String.valueOf(map.get("username")));
@@ -67,5 +96,4 @@ public class IncrSyncService {
         }
         return dataSource;
     }
-
 }

@@ -35,4 +35,9 @@ public interface OrderMapper {
 
     Integer updateCity();
 
+    void deleteOrderById(Long orderId);
+
+    void deleteOrderDetailByOrderId(Long orderId);
+
+    void deleteOrderItemByOrderId(Long orderId);
 }

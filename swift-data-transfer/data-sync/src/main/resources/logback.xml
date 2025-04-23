@@ -36,4 +36,9 @@
         <appender-ref ref="FILE"/>
     </root>
 
+    <!-- 设置DruidDataSource的日志级别为DEBUG -->
+    <logger name="com.alibaba.druid.pool" level="DEBUG" additivity="false">
+        <appender-ref ref="STDOUT" />
+    </logger>
+
 </configuration>

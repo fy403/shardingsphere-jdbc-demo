@@ -1,7 +1,7 @@
 package cn.javayong.transfer.datasync.config;
 
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Map;
 
 public class DataSyncConfig {
 
@@ -28,6 +28,16 @@ public class DataSyncConfig {
 
     public void setIncrStrategy(HashMap<String, HashMap<String, Object>> incrStrategy) {
         this.incrStrategy = incrStrategy;
+    }
+
+    private ArrayList<HashMap<String, HashMap<String, Object>>> incrStrategies = new ArrayList<>();
+
+    // 新增方法，兼容之前的版本
+    public ArrayList<HashMap<String, HashMap<String, Object>>> getIncrStrategies() {
+        return incrStrategies;
+    }
+    public void setIncrStrategies(ArrayList<HashMap<String, HashMap<String, Object>>> incrStrategies) {
+        this.incrStrategies = incrStrategies;
     }
 
 // =========================================== 增量配置 end  =======================================================

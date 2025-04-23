@@ -91,7 +91,7 @@ public class OrderService {
         return orderId;
     }
 
-    public void batchsave() {
+    public void batchsave() throws InterruptedException {
         for (int i = 0; i < 100000; i++) {
             Long entId = RandomUtils.nextLong();
             String regionCode = "BJ";
@@ -140,7 +140,22 @@ public class OrderService {
                 item2.setGoodName("我的商品22222");
                 orderMapper.saveOrderItem(item2);
             }
+            Thread.sleep(50 * new Random().nextInt(10));
         }
+    }
+
+    /**
+     * 删除指定订单号的订单、订单详情和订单项
+     * @param orderId 订单号
+     */
+    @Transactional
+    public void deleteOrder(Long orderId) {
+        // 删除订单条目表
+        orderMapper.deleteOrderItemByOrderId(orderId);
+        // 删除订单详情
+        orderMapper.deleteOrderDetailByOrderId(orderId);
+        // 删除订单基本信息
+        orderMapper.deleteOrderById(orderId);
     }
 
     public List queryOrderListDemo() {

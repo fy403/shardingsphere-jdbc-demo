@@ -58,7 +58,7 @@ public class TestController {
 
     @GetMapping("/batchsave")
     @ApiOperation("batchsave")
-    public ResponseEntity batchsave() {
+    public ResponseEntity batchsave() throws InterruptedException {
         orderService.batchsave();
         return ResponseEntity.successResult(null);
     }
@@ -78,6 +78,13 @@ public class TestController {
         // step 2: 后修改
         orderService.updateCity();
         return ResponseEntity.successResult(list);
+    }
+
+    @GetMapping("/deleteOrder")
+    @ApiOperation("deleteOrder")
+    public ResponseEntity deleteOrder(Long orderId) {
+        orderService.deleteOrder(orderId);
+        return ResponseEntity.successResult(null);
     }
 
 }

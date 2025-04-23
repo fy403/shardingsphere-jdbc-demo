@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 public class MainApplication {
     private final static Logger logger = LoggerFactory.getLogger(MainApplication.class);
     public static void main(String[] args) {
+        // 在代码中添加检查
         logger.info("开始启动同步服务");
         long start = System.currentTimeMillis();
         // 加载配置
@@ -24,6 +25,9 @@ public class MainApplication {
         // 启动增量同步
         IncrSyncService incrSyncService = new IncrSyncService(dataSyncConfig);
         incrSyncService.init();
+
+        fullSyncService.waitForAllThreadsToFinish();
+        incrSyncService.waitForAllThreadsToFinish();
         logger.info("结束启动同步服务 耗时：" + (System.currentTimeMillis() - start) + "毫秒");
     }
 }

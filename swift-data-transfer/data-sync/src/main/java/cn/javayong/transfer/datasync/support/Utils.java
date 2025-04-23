@@ -6,11 +6,13 @@ import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import javax.sql.DataSource;
-import java.io.Reader;
-import java.io.StringReader;
+import java.io.*;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.TimeZone;
 
@@ -20,6 +22,8 @@ public class Utils {
 
     public final static String  timeZone;    // 当前时区
     private static DateTimeZone dateTimeZone;
+    // 持久化游标位置的文件路径
+    private static final String CURSOR_FILE_PATH = "cursor_positions.txt";
 
     static {
         TimeZone localTimeZone = TimeZone.getDefault();
@@ -36,6 +40,65 @@ public class Utils {
         timeZone = symbol + hour + ":" + minute;
         dateTimeZone = DateTimeZone.forID(timeZone);
         TimeZone.setDefault(TimeZone.getTimeZone("GMT" + timeZone));
+    }
+
+    /**
+     * 加载上次游标的最后位置
+     * @param tableName 表名
+     * @return 上次游标的最后位置，如果不存在则返回 0L
+     */
+    public static Long loadLastCursorId(String tableName) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(CURSOR_FILE_PATH))) {
+            log.info("加载上次游标的最后位置");
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split("=");
+                if (parts.length == 2 && parts[0].equals(tableName)) {
+                    return Long.parseLong(parts[1]);
+                }
+            }
+        } catch (IOException e) {
+            // 文件不存在或读取失败，返回默认值 0L
+        }
+        return 0L;
+    }
+
+    public static void saveLastCursorId(String tableName, Long cursorId) {
+        File file = new File(CURSOR_FILE_PATH);
+        boolean append = true;
+        if (!file.exists()) {
+            append = false;
+        } else {
+            // 检查是否需要更新现有记录
+            try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+                String line;
+                StringBuilder content = new StringBuilder();
+                boolean found = false;
+                while ((line = reader.readLine()) != null) {
+                    if (line.startsWith(tableName + "=")) {
+                        content.append(tableName).append("=").append(cursorId).append("\n");
+                        found = true;
+                    } else {
+                        content.append(line).append("\n");
+                    }
+                }
+                if (!found) {
+                    content.append(tableName).append("=").append(cursorId).append("\n");
+                }
+                try (BufferedWriter writer = new BufferedWriter(new FileWriter(file))) {
+                    writer.write(content.toString());
+                }
+            } catch (IOException e) {
+                // 忽略错误，尝试追加新记录
+            }
+        }
+        if (!append) {
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(file, append))) {
+                writer.write(tableName + "=" + cursorId + "\n");
+            } catch (IOException e) {
+                // 记录日志或抛出异常
+            }
+        }
     }
 
     public static LinkedHashMap<String, Integer> getColumnTypes(DataSource dataSource, String tableName) {
@@ -78,6 +141,48 @@ public class Utils {
             }
         }
         return columnTypes;
+    }
+
+    public static LinkedHashMap<String, Integer> getColumnTypesV2(DataSource dataSource, String tableName) {
+        LinkedHashMap<String, Integer> columnTypes = new LinkedHashMap<>(16);
+        String sql = "SHOW COLUMNS FROM " + tableName;
+
+        try (Connection connection = dataSource.getConnection();
+             Statement stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            while (rs.next()) {
+                String columnName = rs.getString("Field");
+                String typeInfo = rs.getString("Type");
+                int dataType = parseTypeFromShowColumns(typeInfo);
+                columnTypes.put(columnName, dataType);
+            }
+        } catch (Exception e) {
+            log.error("表名：" + tableName + " 获取列类型异常:", e);
+        }
+        return columnTypes;
+    }
+
+    private static int parseTypeFromShowColumns(String typeInfo) {
+        if (typeInfo == null) return Types.OTHER;
+
+        // 处理类似 "varchar(255)" 或 "int(11)" 这样的类型
+        String baseType = typeInfo.split("\\(")[0].toUpperCase();
+
+        switch (baseType) {
+            case "INT": return Types.INTEGER;
+            case "VARCHAR": return Types.VARCHAR;
+            case "CHAR": return Types.CHAR;
+            case "BIGINT": return Types.BIGINT;
+            case "DECIMAL": return Types.DECIMAL;
+            case "DATE": return Types.DATE;
+            case "DATETIME":
+            case "TIMESTAMP": return Types.TIMESTAMP;
+            case "TINYINT": return Types.TINYINT;
+            case "TEXT": return Types.LONGVARCHAR;
+            // 添加更多类型...
+            default: return Types.OTHER;
+        }
     }
 
     private static String getTypeName(int dataType) {
@@ -195,7 +300,6 @@ public class Utils {
                 }
                 break;
             case Types.TINYINT:
-                // 向上提升一级，处理unsigned情况
                 if (value instanceof Number) {
                     pstmt.setShort(i, ((Number) value).shortValue());
                 } else if (value instanceof String) {
@@ -315,6 +419,9 @@ public class Utils {
                     } else {
                         pstmt.setObject(i, value);
                     }
+                } else if (value instanceof java.time.LocalDateTime) {
+                    java.time.LocalDateTime ldt = (java.time.LocalDateTime) value;
+                    pstmt.setDate(i, java.sql.Date.valueOf(ldt.toLocalDate()));
                 } else {
                     pstmt.setNull(i, type);
                 }
@@ -332,6 +439,9 @@ public class Utils {
                     } else {
                         pstmt.setNull(i, type);
                     }
+                } else if (value instanceof java.time.LocalDateTime) {
+                    java.time.LocalDateTime ldt = (java.time.LocalDateTime) value;
+                    pstmt.setTime(i, java.sql.Time.valueOf(ldt.toLocalTime()));
                 } else {
                     pstmt.setNull(i, type);
                 }
@@ -353,6 +463,9 @@ public class Utils {
                     } else {
                         pstmt.setObject(i, value);
                     }
+                } else if (value instanceof java.time.LocalDateTime) {
+                    java.time.LocalDateTime ldt = (java.time.LocalDateTime) value;
+                    pstmt.setTimestamp(i, java.sql.Timestamp.valueOf(ldt));
                 } else {
                     pstmt.setNull(i, type);
                 }
@@ -384,5 +497,40 @@ public class Utils {
         return dateTime.toDate();
     }
 
+    /**
+     * Parse a string representation of a timestamp into a LocalDateTime object.
+     * Supports multiple common datetime formats.
+     *
+     * @param timeStr The string representation of the timestamp
+     * @return The parsed LocalDateTime, or null if parsing fails
+     */
+    public static LocalDateTime parseDateTime(String timeStr) {
+        if (StringUtils.isBlank(timeStr)) {
+            return null;
+        }
+        
+        // Common date-time formats
+        String[] patterns = {
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd'T'HH:mm:ss",
+            "yyyy-MM-dd'T'HH:mm:ss.SSS",
+            "yyyy-MM-dd HH:mm:ss.SSS",
+            "yyyy/MM/dd HH:mm:ss",
+            "yyyyMMdd HHmmss"
+        };
+        
+        for (String pattern : patterns) {
+            try {
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern(pattern);
+                return LocalDateTime.parse(timeStr, formatter);
+            } catch (DateTimeParseException e) {
+                // Try the next pattern
+            }
+        }
+        
+        // Log if all parsing attempts failed
+        log.warn("Failed to parse datetime string: {}", timeStr);
+        return null;
+    }
 
 }

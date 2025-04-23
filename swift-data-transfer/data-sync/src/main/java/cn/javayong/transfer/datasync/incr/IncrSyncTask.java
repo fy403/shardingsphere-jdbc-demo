@@ -1,5 +1,6 @@
 package cn.javayong.transfer.datasync.incr;
 
+import cn.javayong.transfer.datasync.checkpoint.SyncContext;
 import cn.javayong.transfer.datasync.full.FullSyncEnv;
 import cn.javayong.transfer.datasync.support.Utils;
 import com.alibaba.druid.pool.DruidDataSource;
@@ -19,10 +20,8 @@ import org.apache.rocketmq.common.message.MessageQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.Statement;
+import java.sql.*;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -34,13 +33,16 @@ public class IncrSyncTask {
 
     private final static Logger logger = LoggerFactory.getLogger(IncrSyncTask.class);
 
-    private final static Integer BATCH_SIZE = 2;
+    private final static Integer BATCH_SIZE = 16;
 
     private IncrSyncEnv incrSyncEnv;
 
     private Thread executeThread;
 
     private DefaultLitePullConsumer litePullConsumer;
+    
+    // 获取同步上下文的单例实例
+    private final SyncContext syncContext = SyncContext.getInstance();
 
     public IncrSyncTask(IncrSyncEnv incrSyncEnv) {
         this.incrSyncEnv = incrSyncEnv;
@@ -60,6 +62,7 @@ public class IncrSyncTask {
             // 自动提交消费偏移量的选项设置为 false
             litePullConsumer.setAutoCommit(false);
             litePullConsumer.start();
+            logger.info("IncrSyncTask start success, subscribe to {}, consumerGrop {}", incrSyncEnv.getTopic(), litePullConsumer.getConsumerGroup());
             this.executeThread = new Thread(new Runnable() {
                 @Override
                 public void run() {
@@ -77,6 +80,10 @@ public class IncrSyncTask {
         }
     }
 
+    public Thread getExecuteThread() {
+        return executeThread;
+    }
+
     private void process() {
         this.dataMarking = fetchDataMarkingFlagFromCenterStore(this.incrSyncEnv.getTopic());
         while (true) {
@@ -84,7 +91,10 @@ public class IncrSyncTask {
             MessageExt commitMessage = null;
             MessageQueue commitCursor = null;
             try {
-                List<MessageExt> messageExtList = litePullConsumer.poll(1500);
+                logger.info("开始尝试从RocketMQ拉取消息...");
+                // 增加超时时间至3秒，避免因网络延迟导致的消息丢失
+                List<MessageExt> messageExtList = litePullConsumer.poll(3000);
+                logger.info("从RocketMQ拉取消息完成，消息数量: {}", messageExtList == null ? "null" : messageExtList.size());
                 if (CollectionUtils.isNotEmpty(messageExtList)) {
 
                     commitMessage = messageExtList.get(0);
@@ -97,6 +107,10 @@ public class IncrSyncTask {
                     // 4、按新表合并
                     logger.info("开始收到消息");
                     Map<String, List<FlatMessage>> tableGroup = new HashMap<>();
+
+                    // 用于记录每个表的第一条消息的创建时间
+                    Map<String, LocalDateTime> firstMessageTimes = new HashMap<>();
+
                     for (MessageExt messageExt : messageExtList) {
                         FlatMessage flatMessage = JSON.parseObject(messageExt.getBody(), FlatMessage.class);
                         logger.info("flatMessage:" + JSON.toJSONString(flatMessage));
@@ -109,6 +123,15 @@ public class IncrSyncTask {
                                 List<FlatMessage> tableItems = tableGroup.get(table);
                                 if (tableItems == null) {
                                     tableItems = new ArrayList<>();
+
+                                    // 为每个表记录第一条消息的创建时间
+                                    if (!data.isEmpty() && data.get(0).containsKey("create_time")) {
+                                        String createTimeStr = data.get(0).get("create_time");
+                                        if (createTimeStr != null) {
+                                            LocalDateTime createTime = Utils.parseDateTime(createTimeStr);
+                                            firstMessageTimes.put(table, createTime);
+                                        }
+                                    }
                                 }
                                 tableItems.add(flatMessage);
                                 tableGroup.put(table, tableItems);
@@ -129,6 +152,17 @@ public class IncrSyncTask {
                     logger.info("结束收到消息");
 
                     if (MapUtils.isNotEmpty(tableGroup)) {
+                        // 更新同步上下文中每个表的增量时间
+                        for (Map.Entry<String, LocalDateTime> entry : firstMessageTimes.entrySet()) {
+                            String tableName = entry.getKey();
+                            LocalDateTime createTime = entry.getValue();
+
+                            // 初始化该表的增量同步时间
+                            syncContext.initializeIncrementalTime(tableName, createTime);
+                            logger.info("Table {} incremental sync time initialized to: {}",
+                                    tableName, createTime != null ? createTime : "current time");
+                        }
+
                         Connection targetConnection = incrSyncEnv.getTargetDataSource().getConnection();
                         targetConnection.setAutoCommit(false);
                         // STEP 1: 首先将事务染色表 状态修改为 1
@@ -171,10 +205,11 @@ public class IncrSyncTask {
             }
         }
     }
-
     private void writeRowDataToTargetDataSource(Connection connection, FlatMessage flatMessage) throws Exception {
         List<Map<String, String>> data = flatMessage.getData();
         Map<String, Integer> sqlType = flatMessage.getSqlType();
+        
+        // 根据操作类型生成不同的 SQL
         if ("UPDATE".equals(flatMessage.getType())) {
             for (Map<String, String> item : data) {
                 Map<String, String> rowData = new LinkedHashMap<>();
@@ -197,13 +232,73 @@ public class IncrSyncTask {
 
                 // 设置预编译
                 PreparedStatement targetPreparedStatement = connection.prepareStatement(updateSql.toString());
-                // step 2.2  设置 targetPreparedStatement 的每个字段值
+                // 设置 targetPreparedStatement 的每个字段值
                 for (int i = 0; i < params.size(); i++) {
                     String columnName = params.get(i);
                     String value = rowData.get(columnName);
                     Integer type = sqlType.get(columnName);
                     Utils.setPStmt(type, targetPreparedStatement, value, i + 1);
                 }
+                targetPreparedStatement.executeUpdate();
+                targetPreparedStatement.close();
+            }
+        } else if ("INSERT".equals(flatMessage.getType())) {
+            for (Map<String, String> item : data) {
+                Map<String, String> rowData = new LinkedHashMap<>();
+                rowData.putAll(item);
+                // 组装 INSERT SQL
+                StringBuilder insertSql = new StringBuilder();
+                insertSql.append("INSERT INTO ").append(flatMessage.getTable()).append(" (");
+
+                List<String> columns = new ArrayList<>();
+                List<String> placeholders = new ArrayList<>();
+                rowData.forEach((key, value) -> {
+                    columns.add(key);
+                    placeholders.add("?");
+                });
+
+                insertSql.append(String.join(", ", columns)).append(") VALUES (");
+                insertSql.append(String.join(", ", placeholders)).append(")");
+                System.out.println(insertSql);
+
+                // 设置预编译
+                PreparedStatement targetPreparedStatement = connection.prepareStatement(insertSql.toString());
+                // 设置 targetPreparedStatement 的每个字段值
+                int index = 1;
+                for (String columnName : columns) {
+                    String value = rowData.get(columnName);
+                    Integer type = sqlType.get(columnName);
+                    Utils.setPStmt(type, targetPreparedStatement, value, index++);
+                }
+
+                try {
+                    targetPreparedStatement.executeUpdate();
+                } catch (Exception e) {
+                    // 捕获插入重复的异常，认为是正确的，不报错
+                    if (e.getMessage().contains("Duplicate entry")) {
+                        logger.warn("Duplicate entry detected for table {}: {}", flatMessage.getTable(), rowData);
+                    } else {
+                        throw e; // 其他异常继续抛出
+                    }
+                } finally {
+                    targetPreparedStatement.close();
+                }
+            }
+        } else if ("DELETE".equals(flatMessage.getType())) {
+            for (Map<String, String> item : data) {
+                Map<String, String> rowData = new LinkedHashMap<>();
+                rowData.putAll(item);
+                // 组装 DELETE SQL
+                StringBuilder deleteSql = new StringBuilder();
+                deleteSql.append("DELETE FROM ").append(flatMessage.getTable()).append(" WHERE id = ?");
+                System.out.println(deleteSql);
+
+                // 设置预编译
+                PreparedStatement targetPreparedStatement = connection.prepareStatement(deleteSql.toString());
+                // 设置 targetPreparedStatement 的主键值
+                String idValue = rowData.get("id");
+                Integer idType = sqlType.get("id");
+                Utils.setPStmt(idType, targetPreparedStatement, idValue, 1);
                 targetPreparedStatement.executeUpdate();
                 targetPreparedStatement.close();
             }

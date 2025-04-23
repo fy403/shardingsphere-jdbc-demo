@@ -1,23 +1,32 @@
 fullStrategy:
     tableConfig:
       tables: t_ent_order,t_ent_order_detail,t_ent_order_item # 全量同步表
-      switchOpen: false                                        # 是否打开开关
+      switchOpen: true                                        # 是否打开开关
     source:                                                   # 源数据库
-      url: jdbc:mysql://127.0.0.1:3308/sharding_db?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true&useCursorFetch=true
+      url: jdbc:mysql://127.0.0.1:3308/sharding_db?useUnicode=true&characterEncoding=utf-8&useSSL=false
       username : root
       password : root
     target:                                                   # 目的数据库
-      url: jdbc:mysql://127.0.0.1:3313/sharding_db?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true
+      url: jdbc:mysql://127.0.0.1:3313/sharding_db?useUnicode=true&characterEncoding=utf-8&useSSL=false
       username: root
       password: root
 
-incrStrategy:
-  tableConfig:
-    tables: t_ent_order,t_ent_order_detail,t_ent_order_item,tb_transaction   # 全量同步表
-    switchOpen: true                                          # 是否打开开关
-    nameServer: 127.0.0.1:9876
-    topic: new-order-topic                                    # 监听新订单4个分片的队列
-  target:                                                     # 目的数据库（写入到老数据库）
-    url: jdbc:mysql://127.0.0.1:3313/sharding_db?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8&useTimezone=true&useCursorFetch=true
-    username: root
-    password : root
+incrStrategies:
+  - tableConfig:
+      tables: t_ent_order,t_ent_order_detail,t_ent_order_item,tb_transaction
+      switchOpen: true
+      nameServer: 127.0.0.1:9876
+      topic: src-new-order-topic
+    target:
+      url: jdbc:mysql://127.0.0.1:3313/sharding_db?useUnicode=true&characterEncoding=utf-8&useSSL=false
+      username: root
+      password: root
+#  - tableConfig:
+#      tables: another_table1,another_table2
+#      switchOpen: true
+#      nameServer: 127.0.0.1:9876
+#      topic: dst-new-order-topic
+#    target:
+#       url: jdbc:mysql://127.0.0.1:3308/sharding_db?useUnicode=true&characterEncoding=utf-8&useSSL=false
+#      username: user
+#      password: pass
