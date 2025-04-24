@@ -56,8 +56,8 @@
              #{regionCode},
              #{address},
              #{status},
-             now(),
-             now()
+             #{createTime},
+             #{updateTime}
         )
     </insert>
 
@@ -81,8 +81,8 @@
              #{goodId},
              #{goodName},
              #{orderId},
-             now(),
-             now()
+             #{createTime},
+             #{updateTime}
         )
     </insert>
 

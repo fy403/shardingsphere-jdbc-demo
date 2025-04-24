@@ -1,6 +1,5 @@
 package cn.javayong.transfer.datasync.incr;
 
-import cn.javayong.transfer.datasync.checkpoint.SyncContext;
 import cn.javayong.transfer.datasync.full.FullSyncEnv;
 import cn.javayong.transfer.datasync.support.Utils;
 import com.alibaba.druid.pool.DruidDataSource;
@@ -42,7 +41,6 @@ public class IncrSyncTask {
     private DefaultLitePullConsumer litePullConsumer;
     
     // 获取同步上下文的单例实例
-    private final SyncContext syncContext = SyncContext.getInstance();
 
     public IncrSyncTask(IncrSyncEnv incrSyncEnv) {
         this.incrSyncEnv = incrSyncEnv;

@@ -10,6 +10,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -43,7 +45,7 @@ public class OrderService {
     public Long save() {
         Long entId = 11215L;
         String regionCode = "BJ";
-
+        Date createTime = new Date();
         //保存订单基本信息
         TEntOrder tEntOrder = new TEntOrder();
         Long orderId = redisIdGeneratorService.createUniqueId(String.valueOf(entId));
@@ -52,6 +54,8 @@ public class OrderService {
         tEntOrder.setAmount(new BigDecimal(12.0));
         tEntOrder.setMobile("150****9235");
         tEntOrder.setEntId(entId);
+        tEntOrder.setCreateTime(createTime);
+        tEntOrder.setUpdateTime(createTime);
         orderMapper.saveOrder(tEntOrder);
 
         //保存订单详情
@@ -63,6 +67,8 @@ public class OrderService {
         tEntOrderDetail.setEntId(entId);
         tEntOrderDetail.setStatus(1);
         tEntOrderDetail.setRegionCode(regionCode);
+        tEntOrderDetail.setCreateTime(createTime);
+        tEntOrderDetail.setUpdateTime(createTime);
         orderMapper.saveOrderDetail(tEntOrderDetail);
 
         //保存订单条目表
@@ -76,6 +82,8 @@ public class OrderService {
             item1.setRegionCode("BG");
             item1.setGoodId("aaaaaaaaaaaa");
             item1.setGoodName("我的商品111111");
+            item1.setCreateTime(createTime);
+            item1.setUpdateTime(createTime);
             orderMapper.saveOrderItem(item1);
             //保存条目 2
             TEntOrderItem item2 = new TEntOrderItem();
@@ -86,6 +94,8 @@ public class OrderService {
             item2.setOrderId(orderId);
             item2.setGoodId("bbbbbbbbbbbb");
             item2.setGoodName("我的商品22222");
+            item2.setCreateTime(createTime);
+            item2.setUpdateTime(createTime);
             orderMapper.saveOrderItem(item2);
         }
         return orderId;
@@ -95,7 +105,7 @@ public class OrderService {
         for (int i = 0; i < 100000; i++) {
             Long entId = RandomUtils.nextLong();
             String regionCode = "BJ";
-
+            Date createTime = new Date();
             //保存订单基本信息
             TEntOrder tEntOrder = new TEntOrder();
             Long orderId = redisIdGeneratorService.createUniqueId(String.valueOf(entId));
@@ -104,6 +114,8 @@ public class OrderService {
             tEntOrder.setAmount(new BigDecimal(12.0));
             tEntOrder.setMobile("150****9235");
             tEntOrder.setEntId(entId);
+            tEntOrder.setCreateTime(createTime);
+            tEntOrder.setUpdateTime(createTime);
             orderMapper.saveOrder(tEntOrder);
 
             //保存订单详情
@@ -115,6 +127,8 @@ public class OrderService {
             tEntOrderDetail.setEntId(entId);
             tEntOrderDetail.setStatus(1);
             tEntOrderDetail.setRegionCode(regionCode);
+            tEntOrderDetail.setCreateTime(createTime);
+            tEntOrderDetail.setUpdateTime(createTime);
             orderMapper.saveOrderDetail(tEntOrderDetail);
 
             //保存订单条目表
@@ -128,6 +142,8 @@ public class OrderService {
                 item1.setRegionCode("BG");
                 item1.setGoodId("aaaaaaaaaaaa");
                 item1.setGoodName("我的商品111111");
+                item1.setCreateTime(createTime);
+                item1.setUpdateTime(createTime);
                 orderMapper.saveOrderItem(item1);
                 //保存条目 2
                 TEntOrderItem item2 = new TEntOrderItem();
@@ -138,6 +154,8 @@ public class OrderService {
                 item2.setOrderId(orderId);
                 item2.setGoodId("bbbbbbbbbbbb");
                 item2.setGoodName("我的商品22222");
+                item2.setCreateTime(createTime);
+                item2.setUpdateTime(createTime);
                 orderMapper.saveOrderItem(item2);
             }
             Thread.sleep(500 * new Random().nextInt(10));

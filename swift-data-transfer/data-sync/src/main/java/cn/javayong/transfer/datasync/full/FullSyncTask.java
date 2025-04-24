@@ -1,6 +1,5 @@
 package cn.javayong.transfer.datasync.full;
 
-import cn.javayong.transfer.datasync.checkpoint.SyncContext;
 import cn.javayong.transfer.datasync.support.Utils;
 import com.alibaba.druid.pool.DruidDataSource;
 import org.slf4j.Logger;
@@ -22,8 +21,8 @@ public class FullSyncTask {
     private final static Logger logger = LoggerFactory.getLogger(FullSyncTask.class);
 
     // 批次大小配置
-    private static final int BATCH_FETCH_SIZE = 100; // 每次查询获取的记录数
-    private static final int BATCH_INSERT_SIZE = 100; // 每次批量插入的记录数
+    private static final int BATCH_FETCH_SIZE = 300; // 每次查询获取的记录数
+    private static final int BATCH_INSERT_SIZE = 300; // 每次批量插入的记录数
 
     private FullSyncEnv fullSyncEnv;
     private String tableName;
@@ -31,16 +30,54 @@ public class FullSyncTask {
     private DruidDataSource targetDataSource;
     private Thread executeThread;
     private Long lastCursorId = 0L;
-    
-    // 获取同步上下文的单例实例
-    private final SyncContext syncContext = SyncContext.getInstance();
+    private Long maxIdBoundary = 0L; // 新增：截至边界
 
     public FullSyncTask(FullSyncEnv fullSyncEnv, String tableName) {
         this.fullSyncEnv = fullSyncEnv;
         this.sourceDataSource = fullSyncEnv.getSourceDataSource();
         this.targetDataSource = fullSyncEnv.getTargetDataSource();
         this.tableName = tableName;
-        this.lastCursorId = Utils.loadLastCursorId(tableName);
+        initCursorAndBoundary(); // 新增：初始化游标和截至边界
+    }
+
+    // 新增：初始化游标和截至边界
+    private void initCursorAndBoundary() {
+        try {
+            // 从目标库读取表的最大 id 作为上次游标索引
+            this.lastCursorId = getMaxIdFromTarget(tableName);
+            // 从源库读取表的最大 id 作为截至边界
+            this.maxIdBoundary = getMaxIdFromSource(tableName);
+            logger.info("表 {} 初始化游标位置: {}, 截至边界: {}", tableName, lastCursorId, maxIdBoundary);
+        } catch (SQLException e) {
+            logger.error("初始化游标和截至边界失败", e);
+            throw new RuntimeException("初始化失败", e);
+        }
+    }
+
+    // 新增：从目标库读取表的最大 id
+    private Long getMaxIdFromTarget(String tableName) throws SQLException {
+        String querySQL = "SELECT MAX(id) FROM " + tableName;
+        try (Connection connection = targetDataSource.getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(querySQL);
+             ResultSet resultSet = preparedStatement.executeQuery()) {
+            if (resultSet.next()) {
+                return resultSet.getLong(1);
+            }
+        }
+        return 0L;
+    }
+
+    // 新增：从源库读取表的最大 id
+    private Long getMaxIdFromSource(String tableName) throws SQLException {
+        String querySQL = "SELECT MAX(id) FROM " + tableName;
+        try (Connection connection = sourceDataSource.getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(querySQL);
+             ResultSet resultSet = preparedStatement.executeQuery()) {
+            if (resultSet.next()) {
+                return resultSet.getLong(1);
+            }
+        }
+        return 0L;
     }
 
     public void start() {
@@ -67,17 +104,10 @@ public class FullSyncTask {
         try {
             LinkedHashMap<String, Integer> columnTypes = Utils.getColumnTypesV2(sourceDataSource, tableName);
             String insertSql = buildInsertSql(tableName, columnTypes);
-            logger.info("表 {} 当前游标位置: {}", tableName, lastCursorId);
+            logger.info("表 {} 当前游标位置: {}, 截至边界: {}", tableName, lastCursorId, maxIdBoundary);
+
             // 批次处理循环
             while (true) {
-                // 检查是否应该停止全量同步
-                if (syncContext.shouldStopFullSync(tableName)) {
-                    logger.info("表 {} 全量同步已达到阈值，增量同步时间为 {}，最后全量同步时间为 {}，停止全量同步",
-                            tableName, 
-                            syncContext.getIncrementalTime(tableName),
-                            syncContext.getLastFullSyncTime(tableName));
-                    break;
-                }
                 // 1. 批次查询数据
                 List<Map<String, Object>> batchData = fetchBatchData(tableName, columnTypes);
                 if (batchData.isEmpty()) {
@@ -85,34 +115,19 @@ public class FullSyncTask {
                     break; // 没有更多数据，退出循环
                 }
 
+                // 终止条件：当一次批量查询的第一个数据的 id 大于截至边界时，停止全量同步
+                if (((Long) batchData.get(0).get("id")) > maxIdBoundary) {
+                    logger.info("表 {} 同步完成，当前游标位置: {}, 截至边界: {}", tableName, lastCursorId, maxIdBoundary);
+                    break;
+                }
+
                 // 2. 批次插入数据
                 int batchCount = batchInsertData(batchData, columnTypes, insertSql);
                 totalCount += batchCount;
 
-                // 3. 更新游标位置和同步上下文
+                // 3. 更新游标位置
                 if (!batchData.isEmpty()) {
                     lastCursorId = (Long) batchData.get(batchData.size() - 1).get("id");
-                    Utils.saveLastCursorId(tableName, lastCursorId);
-                    
-                    // 获取最后一条记录的创建时间（如果有）
-                    Map<String, Object> lastRecord = batchData.get(batchData.size() - 1);
-                    if (lastRecord.containsKey("create_time") && lastRecord.get("create_time") != null) {
-                        Object createTimeObj = lastRecord.get("create_time");
-                        LocalDateTime lastQueryTime = null;
-                        
-                        if (createTimeObj instanceof Timestamp) {
-                            lastQueryTime = ((Timestamp) createTimeObj).toLocalDateTime();
-                        } else if (createTimeObj instanceof String) {
-                            lastQueryTime = Utils.parseDateTime((String) createTimeObj);
-                        }
-                        
-                        if (lastQueryTime != null) {
-                            // 更新同步上下文中的全量同步时间
-                            syncContext.updateLastFullSyncTime(tableName, lastQueryTime);
-                            logger.info("表 {} 更新全量同步时间为: {}", tableName, lastQueryTime);
-                        }
-                    }
-                    
                     logger.info("表 {} 同步进度: 已处理 {} 条记录, 当前游标位置: {}",
                             tableName, totalCount, lastCursorId);
                 }

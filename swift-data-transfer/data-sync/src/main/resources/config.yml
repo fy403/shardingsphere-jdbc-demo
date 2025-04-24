@@ -1,6 +1,7 @@
 fullStrategy:
     tableConfig:
-      tables: t_ent_order,t_ent_order_detail,t_ent_order_item # 全量同步表
+#      tables: t_ent_order_item # 全量同步表
+      tables: t_city,t_ent_order,t_ent_order_detail,t_ent_order_item # 全量同步表
       switchOpen: true                                        # 是否打开开关
     source:                                                   # 源数据库
       url: jdbc:mysql://127.0.0.1:3308/sharding_db?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
@@ -11,16 +12,16 @@ fullStrategy:
       username: root
       password: root
 
-incrStrategies:
-  - tableConfig:
-      tables: t_ent_order,t_ent_order_detail,t_ent_order_item,tb_transaction
-      switchOpen: true
-      nameServer: 127.0.0.1:9876
-      topic: src-new-order-topic
-    target:
-      url: jdbc:mysql://127.0.0.1:3313/sharding_db?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
-      username: root
-      password: root
+#incrStrategies:
+#  - tableConfig:
+#      tables: t_ent_order,t_ent_order_detail,t_ent_order_item,tb_transaction
+#      switchOpen: true
+#      nameServer: 127.0.0.1:9876
+#      topic: src-new-order-topic
+#    target:
+#      url: jdbc:mysql://127.0.0.1:3313/sharding_db?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
+#      username: root
+#      password: root
 #  - tableConfig:
 #      tables: another_table1,another_table2
 #      switchOpen: true
