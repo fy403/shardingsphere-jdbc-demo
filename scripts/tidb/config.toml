@@ -2,61 +2,43 @@
 
 ######################### Global config #########################
 check-thread-count = 8
-export-fix-sql = false
+export-fix-sql = true
 check-data-only = false
 check-struct-only = false
 skip-non-existing-table = true
 
 ######################### Datasource config #########################
 [data-sources]
-[data-sources.master]  # Master database (原 mysql1)
+[data-sources.master]
 host = "127.0.0.1"
 port = 3308
 user = "root"
 password = "root"
-# route-rules = ["rule1"]
-# snapshot = "auto"
 
-[data-sources.slave]   # Slave database (原 tidb0)
+[data-sources.slave]
 host = "127.0.0.1"
 port = 3313
 user = "root"
 password = "root"
-# security.ca-path = ".../ca.crt"
-# security.cert-path = ".../cert.crt"
-# security.key-path = ".../key.crt"
-# snapshot = "auto"
-
-########################### Routes ###########################
-# 不需要分表路由规则，全部注释掉
-# [routes]
-# [routes.rule1]
-# schema-pattern = "sharding_db"
-# table-pattern = "t_*"
-# target-schema = "sharding_db"
-# target-table = "t_*"
 
 ######################### Task config #########################
 [task]
 output-dir = "./output"
 source-instances = ["master"]
 target-instance = "slave"
-
-# 精确指定需要检查的表（原 target-check-tables = ["sharding_db.t_*"]）
 target-check-tables = [
     "sharding_db.t_city",
     "sharding_db.t_ent_order",
     "sharding_db.t_ent_order_detail",
-    "sharding_db.t_ent_order_item"
+    "sharding_db.t_ent_order_item",
 ]
-# target-configs = ["config1"]
-
-######################### Table config #########################
-# 不需要特殊表配置，全部注释掉
-# [table-configs.config1]
-# target-tables = ["schema*.test*", "test2.t2"]
-# range = "age > 10 AND age < 20"
-# index-fields = ["col1","col2"]
-# ignore-columns = ["",""]
-# chunk-size = 0
-# collation = ""
+# # 添加对特殊表配置的引用
+# target-configs = ["ignore_time_config"]
+#
+# ######################### Table config #########################
+# # 配置忽略时间字段的特殊配置
+# [table-configs.ignore_time_config]
+# # 应用到所有需要忽略时间字段的表
+# target-tables = ["sharding_db.t_city", "sharding_db.t_ent_order", "sharding_db.t_ent_order_detail", "sharding_db.t_ent_order_item"]
+# # 忽略 create_time 和 update_time 字段的差异
+# ignore-columns = ["create_time", "update_time"]
